@@ -34,18 +34,18 @@ library(stringr)
 ```{r}
 
 # demographics
-data_demographics_raw <- read_csv("../../../data/AMP study/raw/data_demographics_raw.csv") |>
+data_demographics_raw <- read_csv("../data/raw/data_demographics_raw.csv") |>
   janitor::clean_names()
 
 # data_demographics_raw_messy <- read_csv("../../../data/AMP study/raw/data_demographics_raw_messy.csv", skip = 2) |>
 #   janitor::clean_names()
 
 # self report measure
-data_selfreport_raw <- read_csv("../../../data/AMP study/raw/data_selfreport_raw.csv") |>
+data_selfreport_raw <- read_csv("../data/raw/data_selfreport_raw.csv") |>
   janitor::clean_names()
 
 # affect attribution procedure
-data_amp_raw <- read_csv("../../../data/AMP study/raw/data_amp_raw.csv") |>
+data_amp_raw <- read_csv("../data/raw/data_amp_raw.csv") |>
   janitor::clean_names()
 
 ```
@@ -85,8 +85,29 @@ data_amp_performance_criteria <- data_amp_raw |>
   summarize(proportion_fast_trials_amp = mean(latency_prob)) |>
   mutate(exclude_amp_performance = ifelse(proportion_fast_trials_amp > 0.10, "exclude", "include"))
 
+# determine modal number of trials
+trial_count_data <- data_amp_raw %>%
+  filter(blockcode != "practice", 
+         trialcode != "instructions") |> 
+  group_by(subject) %>%
+  summarise(trial_count = n()) |>
+  mutate(exclude_trial_count = ifelse(trial_count != 72, "exclude", "include"))
+# instead of summarize(n=n) use count() it does the same
+
 ```
 
+## Self-reports
+
+```{r}
+# data_selfreport_criteria <- data_processed_temp |> mutate(exclude_incomplete = if_else(c("like", "positive", "prefer") == "NA", "exclude", "include"))
+  
+data_selfreport_exclusion <- data_processed %>%
+  full_join(trial_count_data, by = "subject") %>%
+  mutate(exclude_self_report = ifelse(is.na(like) | is.na(positive) | is.na(prefer), "exclude", "include")) |>
+  select(c(subject, exclude_self_report))
+
+
+```
 # Self-reports
 
 ```{r}
@@ -130,7 +151,10 @@ TODO extract evaluations on the AMP test blocks and convert to an overall bias s
 # combine all dfs created in the previous chunks
 data_processed_temp <- dat_age_gender |>
   full_join(data_selfreport_scored, by = "subject") |> 
-  full_join(data_amp_performance_criteria, by = "subject")
+  full_join(data_amp_performance_criteria, by = "subject") |>
+  full_join(data_selfreport_exclusion, by = "subject") |>
+  full_join(trial_count_data, by = "subject") |>
+  full_join(data_processed_duplicates, by = "subject") 
 
 # flag all subjects with more than one row in the wide-format data. these should be excluded in the analysis.
 # a more elaborate approach would be to track down the individual dupicate cases and determine which of the mulitiple cases should be retained. 
@@ -141,7 +165,9 @@ data_processed_duplicates <- data_processed_temp |>
 
 # join in the duplicates df
 data_processed_before_exclusions <- data_processed_temp |>
-  full_join(data_processed_duplicates, by = "subject")
+  full_join(data_processed_duplicates, by = "subject") 
+
+
 
 ```
 
@@ -157,12 +183,15 @@ data_processed <- data_processed_before_exclusions |>
                                          # in this case we will exclude participants with missing demographics data or outcomes measures data. 
                                          # Note that "list-wise exclusions" like this aren't always justified, as missingness often isn't at random. 
                                          # How to treat missing data is a  whole area of work in itself, which we wont cover here.
+                                         is.na(mean_evaluation) ~ "exclude",
                                          is.na(age) ~ "exclude", 
                                          is.na(gender) ~ "exclude",
                                          exclude_amp_performance == "exclude" ~ "exclude",
                                          exclude_duplicate_data == "exclude" ~ "exclude",
-                                         TRUE ~ "include"))
-
+                                         exclude_self_report == "exclude" ~ "exclude",
+                                         exclude_trial_count == "exclude" ~ "exclude"
+                                         TRUE ~ "include")
+         
 ```
 
 # Write to disk
@@ -170,10 +199,10 @@ data_processed <- data_processed_before_exclusions |>
 ```{r}
 
 # in case this dir doesn't exist, create it
-dir.create("../../../data/AMP study/processed/")
+dir.create("../data/processed/")
 
 # save data to disk in that dir
-write_csv(data_processed, "../../../data/AMP study/processed/data_processed.csv")
+write_csv(data_processed, "../data/processed/data_processed.csv")
 
 ```
 
