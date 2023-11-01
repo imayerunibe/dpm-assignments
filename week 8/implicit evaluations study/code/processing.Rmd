@@ -97,6 +97,7 @@ data_amp_completeness <- data_amp_raw |>
 
 # data_amp_completeness |>
 #   count(n)
+  
 
 ```
 
@@ -135,6 +136,69 @@ data_selfreport_scored <-
 TODO extract evaluations on the AMP test blocks and convert to an overall bias score
 
 ```{r}
+data_correct_trials <- data_amp_raw |>
+  filter(blockcode != "practice",
+         trialcode != "instructions") |>
+  select(subject, trialcode, correct) |>
+  mutate(prime_congruency = case_when((trialcode == "prime_positive" & 
+                                         correct == 1 ) |
+                                      (trialcode == "prime_negative" &
+                                         correct == 0)~ "congruent", 
+                                      TRUE ~"incongruent"))
+
+
+# creating AMP score
+data_prob_correct <- data_correct_trials |>
+  group_by(subject) |>
+  summarize(amp_score = mean(prime_congruency == "congruent"))
+
+## Sanity Check 1: visual inspection -> looking at data_correct_trials, the first participant "504546409" has 8 trials, 3 of which are marked as "congruent". 3/8 = 0.375. i ran the code for this subject individually and also got 0.375.
+
+person_check <- data_correct_trials |>
+  filter(subject == "504546409") |>
+  summarize(amp_score = mean(prime_congruency == "congruent"))
+  
+## Sanity Check 2: does the probability of congruent trials and the probability of incongruent trials add up to 1? Result: all probabilities add up to 1.
+
+# overall score:
+ sanity_check_2_overall <- data_correct_trials |>
+    select("prime_congruency") |>
+    na.omit(T) |> 
+    tabyl(prime_congruency) |> 
+    adorn_pct_formatting(digits = 2)
+
+# per participant:
+data_prob_incorrect <- data_correct_trials |>
+  group_by(subject) |>
+  summarize(amp_score = mean(prime_congruency == "incongruent"))
+
+sanity_check_2_subject <- data_prob_correct |>
+   full_join(data_prob_incorrect,by="subject") |>
+   mutate(check1 = amp_score.x + amp_score.y)
+
+# Sanity Check 3: does the variable "prime_congruency" lable any congruent trials as incongruent or vice versa?
+sanity_check_3 <- data_correct_trials |>
+  mutate(check3 = case_when((trialcode == "prime_positive" & 
+                               correct == 1 &
+                               prime_congruency == "congruent") |
+                              (trialcode == "prime_negative" &
+                                 correct == 0 &
+                                 prime_congruency == "congruent")|
+                              (trialcode == "prime_positive" &
+                                 correct == 0 &
+                                 prime_congruency == "incongruent") |
+                              (trialcode == "prime_negative" &
+                                 correct == 1 &
+                                 prime_congruency == "incongruent")~ "yes",
+                            TRUE ~"no"))
+
+sanity_check_3 |> 
+    select("check3") |>
+    na.omit(T) |> 
+    tabyl(check3) |> 
+    adorn_pct_formatting(digits = 2)
+
+# Result: all correctly labelled trials are marked with "yes". no trials are marked with "no".
 
 
 ```

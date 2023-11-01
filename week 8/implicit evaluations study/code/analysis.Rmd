@@ -155,8 +155,21 @@ TODO add descriptive plots for self-reported evaluations
 TODO add descriptive stats for AMP
 
 ```{r}
+dat_age_gender_score <- dat_age_gender |>
+  full_join(data_prob_correct, by="subject") |>
+  na.omit()
+  
+data_descriptives_amp <- dat_age_gender_score |>
+  group_by(group = gender) |>
+  summarise(Mean = mean(amp_score, na.rm = TRUE),
+            SD = sd(amp_score, na.rm = TRUE))
 
-
+view(data_descriptives_amp)
+  
+  drop_na() |>
+  filter(gender == "female") |>
+  mean(amp_score)
+  
 ```
 
 ### Descriptive plots
