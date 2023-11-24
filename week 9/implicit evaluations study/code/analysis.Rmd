@@ -144,6 +144,15 @@ bind_rows(dat_mean_ratings,
 TODO add descriptive plots for self-reported evaluations
 
 ```{r}
+ggplot(data_processed_after_exclusions, aes(x=AMP_score)) +
+  geom_histogram(bins=30, binwidth=0.1,
+                 boundary=0.05, fill = "pink", colour = "white") +
+  xlab("AMP score") +
+  ylab("frequency") 
+
+ggplot(data_processed_after_exclusions, aes(x=mean_evaluation)) +
+  geom_histogram(binwidth=1, boundary=0.5) 
+
 
 
 ```
@@ -175,9 +184,13 @@ TODO add descriptive plots for AMP
 TODO add t test comparing self-reported evaluations between men and women
 
 ```{r}
+ggplot(data_processed_after_exclusions, aes(x=mean_evaluation, y=AMP_score)) +
+  geom_point()+
+  geom_smooth(method = "lm") 
 
-
-
+ggplot(data_processed_after_exclusions, aes(x=AMP_score, y=mean_evaluation)) +
+  geom_point()+
+  geom_smooth(method = "lm") 
 ```
 
 ## Evaluations on the Affect Misattribution Procedure
