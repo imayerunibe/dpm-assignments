@@ -404,8 +404,9 @@ Combine plots using patchwork: https://patchwork.data-imaginist.com/
 \TODO Combine at least three of the above plots into one.
 
 ```{r}
-
-
+devtools::install_github("thomasp85/patchwork")
+library(ggplot2)
+library(patchwork)
 
 ```
 
