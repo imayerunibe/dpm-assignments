@@ -194,7 +194,7 @@ ggplot(data_processed_after_exclusions, aes(x = AMP_score)) +
 ### Plot
 
 ```{r}
-
+library(ggplot2)
 ggplot(data_processed_after_exclusions, 
        aes(x = AMP_score,
            y = mean_evaluation)) +
@@ -345,6 +345,7 @@ print(cor_test_result)
 \TODO split histogram, split violin plot, raincloud plot, etc.
 
 ```{r}
+###scatter plot
 split_plot_gender <- ggplot(data_processed_after_exclusions, 
        aes(x = AMP_score,
            y = mean_evaluation,
@@ -357,6 +358,26 @@ split_plot_gender <- ggplot(data_processed_after_exclusions,
   facet_wrap(~gender, scales = "free")
 
 print(split_plot_gender)
+
+### histogram
+histogram_plot_gender <- ggplot(data_processed_after_exclusions, 
+  aes(x = mean_evaluation, fill = gender)) +
+  geom_histogram(position = "identity", alpha = 0.7, bins = 30) +
+  theme_minimal() +
+  facet_wrap(~gender, scales = "free")
+
+print(histogram_plot_gender)
+
+### violin plot
+violin_plot_gender <- ggplot(data_processed_after_exclusions, 
+  aes(x = mean_evaluation)) +
+  geom_violin(alpha = 0.5) +
+  geom_jitter(width = 0.2, alpha = 0.5, color = "black") +
+  theme_minimal() +
+  facet_wrap(~gender, scales = "free")
+
+print(violin_plot_gender)
+
 ```
 
 ### Test
@@ -416,7 +437,7 @@ print(split_plot_gender_new)
 
 
 ###version 2: violin plot
-violin_plot_gender <- ggplot(data_processed_after_exclusions, 
+violin_plot_gender_new <- ggplot(data_processed_after_exclusions, 
   aes(x = gender, y = mean_evaluation, fill = gender)) +
   geom_violin() +
   ggtitle("Violin Plot by Gender") +
@@ -425,7 +446,18 @@ violin_plot_gender <- ggplot(data_processed_after_exclusions,
   theme_minimal() +
   scale_x_discrete(labels = c(nonbinary = "Nonbinary", female = "Female", male = "Male"))
 
-print(violin_plot_gender)
+print(violin_plot_gender_new)
+
+### version 3: histogram
+histogram_plot_gender_new <- ggplot(data_processed_after_exclusions, 
+  aes(x = mean_evaluation, fill = gender)) +
+  geom_histogram(position = "identity", alpha = 0.7, bins = 30) + xlab("Mean self-reported Evaluation") +
+  ylab("Frequency") +
+  theme_minimal() +
+  facet_wrap(~gender, scales = "free") +  facet_wrap(~gender, scales = "free", labeller = labeller(gender = c(nonbinary = "Nonbinary", female = "Female", male = "Male")))
+
+print(histogram_plot_gender_new)
+
 ```
 
 ### Test
