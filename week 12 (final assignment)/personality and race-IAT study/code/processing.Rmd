@@ -1,0 +1,389 @@
+---
+title: "Examining the relationship between the big-5 personality facets and implicit racial attitudes"
+subtitle: "Data processing"
+author: "Template: Ian Hussey; content: Isabel Mayer"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+```{r, include=FALSE}
+
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+
+```
+
+# Dependencies
+
+```{r}
+
+library(tidyverse)
+library(janitor) # for clean_names()
+library(stringr)
+library(openxlsx)
+
+```
+
+# Get data
+
+```{r}
+
+# demographics
+data_demographics_raw <- read_csv("../data/raw/data_raw_demographics.csv") |>
+  janitor::clean_names()
+
+# bfi data
+data_bfi_raw <- read_csv("../data/raw/data_raw_bfi.csv") |>
+  janitor::clean_names()
+
+# IAT data
+data_iat_raw <- read_csv("../data/raw/data_raw_iat.csv") |>
+  janitor::clean_names()
+
+```
+
+# Demographics
+Exclusion of age and gender from demographics data.
+```{r}
+dat_age_gender_formatted <- data_demographics_raw %>%
+  mutate(
+    unique_id = as.character(unique_id),
+    response = ifelse(response == "NULL", NA_character_, response)
+  ) %>%
+  filter(variable %in% c('age', 'sex')) %>%
+  filter(!is.na(unique_id)) %>%
+  group_by(unique_id) %>%
+  summarise(
+    age = ifelse("age" %in% variable, first(response), NA_character_),
+    sex = ifelse("sex" %in% variable, first(response), NA_character_)
+  ) %>%
+  ungroup() %>%
+  rename(id = unique_id)
+
+# Excluding participants with NAs.
+dat_age_gender_clean <- dat_age_gender_formatted %>%
+  filter(complete.cases(.))
+
+```
+
+# Inversion
+
+```{r}
+data_bfi_reversed <- data_bfi_raw %>%
+  mutate(
+    # Extroversion (E) scale
+    bfi_e2 = 8 - bfi_e2,
+    bfi_e5 = 8 - bfi_e5,
+    bfi_e7 = 8 - bfi_e7,
+
+    # Conscientiousness (C) scale
+    bfi_c2 = 8 - bfi_c2,
+    bfi_c4 = 8 - bfi_c4,
+    bfi_c5 = 8 - bfi_c5,
+    bfi_c9 = 8 - bfi_c9,
+
+    # Neuroticism (N) scale
+    bfi_n2 = 8 - bfi_n2,
+    bfi_n5 = 8 - bfi_n5,
+    bfi_n7 = 8 - bfi_n7,
+
+    # Agreeableness (A) scale
+    bfi_a1 = 8 - bfi_a1,
+    bfi_a3 = 8 - bfi_a3,
+    bfi_a6 = 8 - bfi_a6,
+    bfi_a8 = 8 - bfi_a8,
+
+    # Openness (O) scale
+    bfi_o7 = 8 - bfi_o7,
+    bfi_o9 = 8 - bfi_o9
+  )
+
+## Sanity check
+# List of subscales
+subscales <- list(
+  extroversion = c("bfi_e2", "bfi_e5", "bfi_e7"),
+  conscientiousness = c("bfi_c2", "bfi_c4", "bfi_c5", "bfi_c9"),
+  neuroticism = c("bfi_n2", "bfi_n5", "bfi_n7"),
+  agreeableness = c("bfi_a1", "bfi_a3", "bfi_a6", "bfi_a8"),
+  openness = c("bfi_o7", "bfi_o9")
+)
+
+# Perform the sanity check
+sanity_check <- lapply(subscales, function(subscale_items) {
+  correlation_matrix <- cor(data_bfi_reversed[subscale_items], use = "complete.obs")
+  all(correlation_matrix > 0)
+})
+
+
+```
+
+
+# BFI
+## Exclusions
+
+```{r}
+## Clean data
+data_bfi_formatted <- data_bfi_raw |>
+  rename(id = unique_id) |>
+  mutate(id = as.character(id))
+
+## Score validity 
+# Define the range for valid scores
+valid_score_range <- 1:6
+
+# Create an exclusion variable for values outside the possible range
+data_bfi_exclusion_score <- data_bfi_reversed %>%
+  mutate(
+    exclusion_score = ifelse(
+      rowSums(across(starts_with("bfi_"), ~ !between(., min(valid_score_range), max(valid_score_range)) & !is.na(.))) > 0,
+      "exclude",
+      "include"
+    )
+  ) %>%
+  select(unique_id, exclusion_score) |>
+  rename(id = unique_id)
+
+## incomplete data
+# Define BFI Scales
+bfi_scales <- c("bfi_a", "bfi_c", "bfi_e", "bfi_n", "bfi_o")
+
+# Count Completed Items within Each Scale
+data_bfi_counts <- data_bfi_raw %>%
+  gather(key = "variable", value = "response", starts_with(bfi_scales)) %>%
+  group_by(unique_id, variable) %>%
+  summarise(
+    num_completed_items = sum(!is.na(response)),
+    num_items = n()
+  )
+
+# Check for Incomplete Scales
+data_bfi_exclusion_incomplete <- data_bfi_counts %>%
+  group_by(unique_id) %>%
+  summarise(
+    exclusion_incomplete_scales = ifelse(any(num_completed_items < num_items & num_completed_items > 0), "exclude", "include")
+  ) |>
+  rename(id = unique_id)
+
+# Combine Exclusion Variables
+data_bfi_exclusions <- left_join(data_bfi_exclusion_incomplete, data_bfi_exclusion_score, by = "id")
+```
+
+## Mean Score
+
+```{r}
+data_bfi_means <- data_bfi_raw %>%
+  group_by(unique_id) %>%
+  summarise(
+    mean_bfi_a = mean(c_across(starts_with("bfi_a")), na.rm = TRUE),
+    mean_bfi_c = mean(c_across(starts_with("bfi_c")), na.rm = TRUE),
+    mean_bfi_e = mean(c_across(starts_with("bfi_e")), na.rm = TRUE),
+    mean_bfi_n = mean(c_across(starts_with("bfi_n")), na.rm = TRUE),
+    mean_bfi_o = mean(c_across(starts_with("bfi_o")), na.rm = TRUE)
+  ) |>
+  rename(id = unique_id, 
+         agreeableness = mean_bfi_a,
+         conscientiousness = mean_bfi_c,
+         extraversion = mean_bfi_e,
+         neuroticism = mean_bfi_n,
+         openness = mean_bfi_o)
+
+# Insert mean scores in the original data
+data_bfi_complete <- merge(data_bfi_formatted, data_bfi_means)
+
+# Define the possible range for each subscale
+valid_range <- list(
+  bfi_a = c(1, 6),  
+  bfi_c = c(1, 6),
+  bfi_e = c(1, 6),
+  bfi_n = c(1, 6),
+  bfi_o = c(1, 6)
+)
+
+# Gather the data for better manipulation
+data_bfi_long <- data_bfi_means %>%
+  gather(key = "subscale", value = "score", -id)
+
+# Function to check if a value violates the valid range
+check_violation <- function(value, subscale) {
+  range_limits <- valid_range[[subscale]]
+  if (!is.null(range_limits)) {
+    between(value, range_limits[1], range_limits[2])
+  } else {
+    TRUE  # Assume no violation for NULL range_limits
+  }
+}
+
+# Check for violations
+data_bfi_long <- data_bfi_long %>%
+  mutate(violation = ifelse(!pmap_lgl(list(score, subscale), check_violation), "exclude", "include"))
+
+# Spread the data back to the original format
+data_bfi_means_violation <- data_bfi_long %>%
+  spread(key = "subscale", value = "score")
+
+# Print the excluded participants
+excluded_participants <- data_bfi_means_violation %>%
+  filter(violation == "exclude") %>%
+  select(id)
+
+print(excluded_participants)
+
+# Combine means with the item scores
+data_bfi_final <- merge(data_bfi_exclusions, data_bfi_complete, by = "id") |>
+  mutate(id = as.character(id))
+```
+
+# IAT
+## Score
+
+```{r}
+# Use the first row as column headers with underscores
+col_names <- tolower(gsub(" ", "_", data_iat_raw[1, ]))
+colnames(data_iat_raw) <- col_names
+
+# Rename the columns 
+data_iat_filtered <- data_iat_raw %>%
+  rename(trial_reaction_time = `trial_reaction_time_(in_ms)`) |>
+  rename(id = "unique_id")
+
+# Remove the first row and filter out practice blocks (blocks 1, 2, and 5)
+data_iat_filtered <- data_iat_filtered[-1, ] %>%
+  filter(block_number %in% c(3, 4, 6, 7))
+
+# Convert 'trial_reaction_time' to numeric
+data_iat_filtered$trial_reaction_time <- as.numeric(data_iat_filtered$trial_reaction_time)
+
+# Create a formatted dataset with one row per participant
+data_iat_formatted <- data_iat_filtered |>
+  group_by(id)
+
+# Calculate mean RT for blocks 3 and 6 (mean1)
+mean1 <- data_iat_filtered %>%
+  filter(block_number %in% c(3, 6)) %>%
+  summarise(mean1 = mean(`trial_reaction_time`, na.rm = TRUE)) %>%
+  pull(mean1)
+
+# Calculate mean RT for blocks 4 and 7 (mean2)
+mean2 <- data_iat_filtered %>%
+  filter(block_number %in% c(4, 7)) %>%
+  summarise(mean2 = mean(`trial_reaction_time`, na.rm = TRUE)) %>%
+  pull(mean2)
+
+# Calculate SD of RTs in blocks 3, 4, 6, and 7 (SD)
+sd_value <- data_iat_filtered %>%
+  summarise(SD = sd(`trial_reaction_time`, na.rm = TRUE)) %>%
+  pull(SD)
+
+# Check the intermediate values
+print(mean1)
+print(mean2)
+print(sd_value)
+
+# Calculate D score
+D_score <- (mean2 - mean1) / sd_value
+  
+# Print the D score
+print(D_score)
+
+
+## Sanity check
+# Check if any D score is outside the range [-2, 2]
+if (any(D_score < -2 | D_score > 2)) {
+  warning("Some D scores are outside the expected range of -2 to +2. Check your implementation.")
+} else {
+  print("All D scores are within the expected range.")
+}
+
+```
+A D score of -0.203158 suggests a small negative association between the conditions represented by mean2 and mean1.
+
+
+## Exclusions
+
+```{r}
+## Number of trials
+# Count the number of trials for each participant
+trials_per_participant <- data_iat_filtered %>%
+  group_by(id) %>%
+  summarise(num_trials = n())
+
+# Set the exclusion variable based on the number of trials
+threshold_trials <- 120
+data_iat_exclusion_completion <- data_iat_filtered %>%
+  left_join(trials_per_participant, by = "id") %>%
+  mutate(exclusion_completion = ifelse(is.na(num_trials) | num_trials < threshold_trials, "exclude", "include")) %>%
+  select(-num_trials) |>
+  distinct(id, .keep_all = TRUE) |>
+  select(id, exclusion_completion)
+
+## AIT performance
+# Set the exclusion variable based on IAT performance criteria
+criteria_threshold_rt <- 300
+criteria_threshold_accuracy <- 75
+threshold_percentage_low_rt <- 10
+threshold_percentage_low_accuracy <- 10
+
+data_iat_exclusion_performance <- data_iat_filtered %>%
+  filter(block_number %in% c(3, 4, 6, 7)) %>%
+  group_by(id) %>%
+  summarise(
+    percentage_low_rt = mean(trial_reaction_time < criteria_threshold_rt, na.rm = TRUE) * 100,
+    percentage_low_accuracy = mean(trial_accuracy == "incorrect", na.rm = TRUE) * 100
+  ) %>%
+  mutate(
+    exclusion_performance = ifelse(
+      percentage_low_rt > threshold_percentage_low_rt | percentage_low_accuracy > threshold_percentage_low_accuracy,
+      "exclude",
+      "include"
+    )
+  ) |>
+  select(id, exclusion_performance)
+
+# Combine Exclusion Variables
+data_iat_exclusions <- left_join(data_iat_exclusion_completion, data_iat_exclusion_performance, by = "id") |>
+  mutate(id = as.character(id))
+```
+
+# Combine
+
+```{r}
+# Merge demographics, BFI data and IAT data
+common_participants <- Reduce(intersect, list(dat_age_gender_formatted$id, data_bfi_final$id, data_iat_exclusions$id))
+
+df1_subset <- dat_age_gender_formatted[dat_age_gender_formatted$id %in% common_participants, ]
+df2_subset <- data_bfi_final[data_bfi_final$id %in% common_participants, ]
+df3_subset <- data_iat_exclusions[data_iat_exclusions$id %in% common_participants, ]
+
+# Merge dataframes using common_participants
+merged_data <- inner_join(df1_subset, df2_subset, by = "id")
+merged_data <- inner_join(merged_data, df3_subset, by = "id")
+```
+
+# Master Exclusion
+
+```{r}
+data_processed <- merged_data %>%
+  mutate(
+    exclude_participant = case_when(
+      exclusion_incomplete_scales == "exclude" |
+      exclusion_score == "exclude" |
+      exclusion_performance == "exclude" |
+        exclusion_completion == "exclude"
+      ~ "exclude" ,
+      TRUE ~"include"))
+
+```
+
+# Save data
+
+```{r}
+write_csv(data_processed, "../data/processed/data_processed.csv")
+```
+
+
