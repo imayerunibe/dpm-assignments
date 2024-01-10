@@ -1,6 +1,6 @@
 ---
 title: "Plot assignment"
-author: "Template: Ian Hussey; content: [Student name]"
+author: "Template: Ian Hussey; content: Isabel Mayer"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document:
@@ -23,66 +23,224 @@ knitr::opts_chunk$set(message = FALSE,
 ```{r}
 
 library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(scales)
+library(psych)
+library(patchwork)
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+library(see)
+library(ggsignif)
 
 ```
 
-# Instructions
-
-The goal of this exercise is to produce both good and bad examples of plots *and to be explicit about what makes them good or bad*. 
-
-The data can be real or fabricated. The plots can convey realistic or silly messages - but they must convey them clearly. You can get real data from many sources. A good one is the open science framekwork (osf.io). You can also simply make up data, either by hand or using simulation functions (e.g., `rnorm`) or the many simulation packages. If simulating data, ensure that you (a) use set.seed() to make it reproudbile, and (b) save a copy of the final data that you're using to disk and then reload it in the script so that the plot is reproducible.
-
-The goal is neither to reproduce the types of plots that you most often see in journals (bar plots, etc.) nor to use a very fancy looking plot just for the sake of it - if it is very unlikely that you'd ever be able to use the plot to convey a research finding in an article, blog, poster, tweet, infographic or otherwise, it's probably not a good choice either.
-
-The plots must be reproducible. Provide the data as well as the code to reporduce them. The plots should also be saved as individual images (pdf or png).
-
-Under each plot, here in the RMarkdown, briefly explain what types of analysis the plot is suitable for, what elements of the results the plot attempts to clearly convey. For the bad plot, do the opposite: emphasise what features of the results the plot obscures or makes unclear. In doing so, communicate to me that you understand what makes a good plot to convey the results of quantiative analyses to viewers.
-
-Consider making use of the many extensions to ggplot2, e.g.:
-
-- https://r-graph-gallery.com
-- https://krzjoa.github.io/awesome-r-dataviz/#/
-- ggdist https://mjskay.github.io/ggdist/
-- ggrepel
-- ggpubr
-- see
-- ggsignif
-- and others: https://exts.ggplot2.tidyverse.org/gallery/
-
-# Good plot
+# Data
 
 ```{r}
-
-
-
+mres <- readr::read_csv("data/RMET_Project_Data_OSF.csv")
 ```
 
-# Bad plot
-
+## Removing straight liners
+Taken over from the original processing code.
 ```{r}
+#REMOVING STRAIGHT LINERS - SKIP THIS SECTION TO ANALYSE DATA WITH THESE PARTICIPANTS RETAINED
 
 
+# # identifying participants who straight line responded to the AQ
+
+a <- dplyr::select(mres,starts_with("AQ")) 
+a<-na.omit(a)
+
+keep.a <- apply(a,1,function(x) length(unique(x[!is.na(x)])) !=1) 
+retained_a<-a[keep.a,]
+excluded_a <-a[!keep.a,]
+which(!keep.a)
+
+# identifying participants who straight line responded to TAS
+t <- dplyr::select(mres,starts_with("TAS"))
+keep.t <- apply(t,1,function(x) length(unique(x[!is.na(x)])) !=1)
+retained_t<-t[keep.t,]
+which(!keep.t)
+
+# # identifying participants who straight line responded to IMT
+tom <- mres[,c(paste0("TOM0",1:9),paste0("TOM",10:16))]
+keep.tom <- apply(tom,1,function(x) length(unique(x[!is.na(x)])) !=1)
+retained_tom<-t[keep.tom,]
+which(!keep.tom)
+
+
+# removing straight line responing participants                                                                                
+mres.pass <- mres[-c(20 ,  28,  100,  152, 376 , 549 , 665, 670,  737 , 749 ,782,794, 825,832,847, 860,  864,  871 , 903 ,904,920, 927,936,960,975,  977, 980,1004,1007,1023,1059, 1061, 1086,1089, 1091 ,1107,1161, 1163,1210,1214,1221  ),]                                                                                               
+
+mres <- mres.pass # renaming as mres
+mres <- readr::type_convert(mres) # converting the types of the data
+mres.tom <- mres %>% drop_na  (TOM16) #remove participants who did not complete ToM task.
 
 ```
+
+## Reverse Code
+Taken from original processing code.
+```{r}
+#CODE TO REVERSE CODE TAS
+
+mres$TAS04 <- 6 - mres$TAS04
+mres$TAS05 <- 6 - mres$TAS05
+mres$TAS10 <- 6 - mres$TAS10
+mres$TAS18 <- 6 - mres$TAS18
+mres$TAS19 <- 6 - mres$TAS19
+
+# CODE TO REVERSE CODE AQ 
+
+mres$AQ02 <- 5 - mres$AQ02
+mres$AQ04 <- 5 - mres$AQ04
+mres$AQ05 <- 5 - mres$AQ05
+mres$AQ07 <- 5 - mres$AQ07
+mres$AQ10 <- 5 - mres$AQ10
+mres$AQ13 <- 5 - mres$AQ13
+mres$AQ14 <- 5 - mres$AQ14
+mres$AQ15 <- 5 - mres$AQ15
+mres$AQ16 <- 5 - mres$AQ16
+mres$AQ22 <- 5 - mres$AQ22
+mres$AQ23 <- 5 - mres$AQ23
+mres$AQ25 <- 5 - mres$AQ25
+mres$AQ26 <- 5 - mres$AQ26
+
+#CODE TO SCORE IMT FALSE ANSWERS
+
+mres$TOM02 <- 3 - mres$TOM02
+mres$TOM04 <- 3 - mres$TOM04
+mres$TOM05 <- 3 - mres$TOM05
+mres$TOM07 <- 3 - mres$TOM07
+mres$TOM11 <- 3 - mres$TOM11
+mres$TOM13 <- 3 - mres$TOM13
+mres$TOM15 <- 3 - mres$TOM15
+mres$TOM16 <- 3 - mres$TOM16
+```
+
+## Totals
+Taken from original processing code.
+```{r}
+# CREATING TOTALS DATAFRAME
+
+# LIST OF TAS TOTALS OVERALL AND FOR SUBSCALES 
+tas.list <- list(tas.total=c("TAS01", "TAS02", "TAS03", "TAS04", "TAS05", "TAS06", "TAS07", "TAS08", "TAS09", "TAS10", "TAS11", "TAS12", "TAS13","TAS14", "TAS15", "TAS16", "TAS17", "TAS18", "TAS19", "TAS20"), 
+                 tas.identify=c("TAS01", "TAS03", "TAS06", "TAS07", "TAS09","TAS13", "TAS14"),
+                 tas.describe=c("TAS02","TAS04", "TAS11","TAS12","TAS17"),
+                 tas.external=c("TAS05","TAS08","TAS10","TAS15","TAS16","TAS18", "TAS19","TAS20"))
+
+
+tas.metrics <- scoreItems(tas.list, mres, totals=TRUE) #psychometric data for TAS results
+tas.scores <- as.data.frame(tas.metrics$scores) #TAS scores with total and subscales
+tas.scores$ID.2 <- mres$ID #adding ID column
+
+# LIST OF AQ TOTALS OVERALL AND SUBSCALES 
+
+aq.list <- list(aq.total=c("AQ01", "AQ02", "AQ03", "AQ04", "AQ05", "AQ06", "AQ07", "AQ08", "AQ09", "AQ10", "AQ11", "AQ12", "AQ13", "AQ14","AQ15","AQ16", "AQ17", "AQ18", "AQ19", "AQ20", "AQ21", "AQ22", "AQ23", "AQ24", "AQ25", "AQ26", "AQ27", "AQ28"),
+                aq.social.behaviour=c("AQ01", "AQ02", "AQ03", "AQ04",  "AQ06", "AQ08", "AQ09", "AQ10", "AQ11", "AQ12",  "AQ14", "AQ15", "AQ17", "AQ18", "AQ19", "AQ20", "AQ21", "AQ23", "AQ24", "AQ25", "AQ26", "AQ27", "AQ28"),
+                aq.numbers.patterns=c("AQ05","AQ07","AQ13","AQ16","AQ22"),
+                aq.social.skills=c("AQ01","AQ09","AQ10","AQ12","AQ15","AQ24","AQ26","AQ27"),
+                aq.routine=c("AQ02","AQ17","AQ19","AQ26"),
+                aq.switching=c("AQ04","AQ08","AQ18","AQ21"),
+                aq.imagination=c("AQ03","AQ06","AQ11","AQ14","AQ20","AQ23","AQ25","AQ28"))
+
+aq.metrics <- scoreItems(aq.list, mres, totals=TRUE) #psychometric data for AQ results
+aq.scores <- as.data.frame(aq.metrics$scores) #AQ scores with total and subscale totals
+aq.scores$ID.1 <- mres$ID #Add participant ID column 
+
+#RMET SCORES
+
+rmet.scores <- mres[,c(paste0("R0",1:9),paste0("R",10:36))] #creating table of RMET responses
+# run exploratory code for items that fail consensus here to keep all four choices separate.
+rmet.scores[rmet.scores !=1] <- 0
+rmet.scores$rmet.correct <- rowSums(rmet.scores==1) #add a column to rmet.scores with number of RMET correct responses, which equals RMET score.
+rmet.scores$ID <- mres$ID #add ID column to rmet.scores
+rmet.scores$aq.total <- aq.scores$aq.total #ad aq total scores column to rmet.scores
+rmet.scores <- dplyr::select(rmet.scores,ID,aq.total,rmet.correct,everything()) #reordering columns
+
+# IMT TOM and MEMORY SCORES
+imt.scores <- dplyr::select(mres, TOM01, TOM02, TOM03, TOM04, TOM05, TOM06, TOM07, TOM08,  TOM09, TOM10, TOM11, TOM12, TOM13, TOM14, TOM15, TOM16)
+imt.scores$ID <- mres$ID # add ID column
+imt.scores$imt.correct <- rowSums(imt.scores ==1) #total score for all IMT questions
+imt.scores <- dplyr::select(imt.scores, ID, imt.correct, everything()) #reorder to have ID and total score columns first
+
+imt.memory.scores <- dplyr::select(imt.scores,ID, TOM03, TOM04,TOM06, TOM07, TOM10, TOM12, TOM15, TOM16 ) # IMT memory items
+imt.tom.scores <- dplyr::select(imt.scores, ID, TOM01,TOM02,TOM05,TOM08, TOM09, TOM11, TOM13, TOM14) #IMT ToM items
+imt.memory.scores$imt.memory.correct <- rowSums(imt.memory.scores==1) #total score for IMT memory
+imt.memory.scores <- dplyr::select(imt.memory.scores, ID, imt.memory.correct, everything()) #reorder columns
+imt.tom.scores$imt.tom.correct <- rowSums(imt.tom.scores==1) # total score for IMT ToM
+imt.tom.scores <- dplyr::select(imt.tom.scores, ID, imt.tom.correct, everything())
+
+# creating a data frame with totals for all meausres
+totals <- tibble(ID=mres$ID, attention=mres$Attention_1, ethnicity=mres$ethnicity, gender=mres$gender, age=mres$age, god=mres$Dem_god_4, comfort=mres$R_Comfort_1, tas.scores, aq.scores, imt.correct=imt.scores$imt.correct, imt.memory.correct=imt.memory.scores$imt.memory.correct,imt.tom.correct= imt.tom.scores$imt.tom.correct, rmet.correct=rmet.scores$rmet.correct, education=mres$Dem_education) #totals of scores for measures
+```
+Note: I added the variable mres$ethnicity to the totals dataframe for plotting purposes.
+
+# Good Plot
+Plot showing the distribution of Scores in Autism Spectrum Quotient Short (AQ-S), Toronto Alexithymia Scale (TAS) and Reading the Mind in the Eyes test (RMET)
+```{r}
+# Add TAS variable
+totals <- totals |>
+  mutate(TAS = if_else(tas.total >54, "Alexithymia", "No Alexithymia"))
+
+totals$TAS <- factor(totals$TAS)
+
+plot_good <- ggscatter(totals, x = "rmet.correct", y = "aq.total", 
+                          palette = "jco", facet.by = "TAS",
+                          add = "reg.line") + geom_jitter(position = position_jitter(width = 0.05), alpha = 0.5, size = 0.005, shape = 16, show.legend = FALSE) 
+
+# Add labels
+plot_good <- plot_good +
+  labs(
+    x = "RMET Score",
+    y = "AQ-S Score",
+    title = "Autism Spectrum Quotient and Reading the Mind in the Eye Test Score",
+    subtitle = "For people with high and low scores on the Toronto Alexithymia Scale",
+    caption = "Source: https://osf.io/6hy95"
+  )
+print(plot_good)
+```
+
+
+Reasons why this is a good plot:
+- The scatter plot allows to visualize the relationship between the Autism Spectrum Quotient (AQ) score (x = "aq.total") and the Reading the Mind in the Eyes test (RMET) score (y = "rmet.correct"). Putting these variables in comparison makes sense, since one can expect a relationship.
+- In addition, the plot is faceted by the TAS Score (I set the Cut-Off 54 for Alexithymia), allowing us to compare the scatter plots side by side. 
+- The addition of jitter helps avoid overplotting, making it easier to see the density of points.
+- The regression lines help to visualize the trend of the correlation at first sight.
+- Proper labeling and legends make the plot more informative. 
+- The title is long but informative
+- The source is added at the bottom right hand corner
+- There is no color added since it is not necessary in this context (the alexithymia/no alexithymia distinction is clear because of the facets) - however one could add colours for aesthetics:)
+- 
+
+# Bad Plot
+Plot showing the relationship of ethnicity, the score in the Imposing Memory Task (IMT) and the level of reported comfort when viewing eye stimuli
+```{r}
+plot_bad <- ggplot(totals, aes(x = imt.correct, y = comfort, color = ethnicity)) +
+  geom_point(size = 5, alpha = 0.5) + 
+  labs(title = "Bad Plot with Inappropriate Choices") +
+  geom_text(aes(label = ID), vjust = 1, hjust = 0.75) +
+  theme_minimal()  
+
+
+# Print the bad plot
+print(plot_bad)
+
+```
+
+
+Reasons why this is a bad plot:
+- A scatter plot (geom_point()) is used, but it does not convey any meaningful information. The plot shows the relationship between the variables imt.correct (score of the IMT) and comfort (reported level of comfort when being presented with eye stimuli for the RMET) despite there beeing no reason to assume a relationship. The density of the jitter points is unclear because of the coloring.  
+- There are no axis labels (xlab() and ylab()) or a legend (labs(color = ...)) to provide context for the variables. The axis therefore carry the name of the column in the dataset (i.e. imt.correct) which doesn't look nice and is confusing to the viewer. 
+- Color is mapped to the "ethnicity" variable, but the coding in numbers (1-16) remains unexplained, the colors do not convey any meaningful information and they overlap in the plot. 
+- The jitter points are unnecessarily labelled with the ID numbers but they are not legible as they too overlap. They are set slightly off to the left which looks unsettling and doesn't aid the legibility.
+- The title doesn't convey any meaningful information.
 
 # Write to disk
 
-Write to disk as a .pdf or .png.
-
-Name them "plot_good_[yourname]" and "plot_bad_[yourname]".
-
 ```{r}
-
-
-
+ggsave("plot_good_IsabelMayer.png", plot = plot_good, width = 8, height = 5)
+ggsave("plot_bad_IsabelMayer.png", plot = plot_bad, width = 8, height = 6)
 ```
-
-# Session info
-
-```{r}
-
-sessionInfo()
-
-```
-
 
